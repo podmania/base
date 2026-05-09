@@ -111,8 +111,12 @@ jobs:
       - name: Build and push to GHCR
         run: |
           TAG="${{ needs.check-version.outputs.tag }}"
-          nix run .#base-image.copyTo --impure -- docker://${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG}-${{ matrix.arch }}
-          nix run .#base-image.copyTo --impure -- docker://${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-${{ matrix.arch }}
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+          ARCH="${{ matrix.arch }}"
+          nix run .#base-image.copyTo --impure -- "docker://${IMAGE}:${TAG}-${ARCH}"
+          nix run .#base-image.copyTo --impure -- "docker://${IMAGE}:latest-${ARCH}"
+          nix run .#base-debug-image.copyTo --impure -- "docker://${IMAGE}:${TAG}-debug-${ARCH}"
+          nix run .#base-debug-image.copyTo --impure -- "docker://${IMAGE}:latest-debug-${ARCH}"
 
   create-manifest:
     needs: [check-version, build]
@@ -124,18 +128,18 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ github.token }}
-      - name: Create multi-arch manifest
+      - name: Create multi-arch manifests
         run: |
           TAG="${{ needs.check-version.outputs.tag }}"
-          docker manifest create ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG} \
-            --amend ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG}-amd64 \
-            --amend ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG}-arm64
-          docker manifest push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG}
-
-          docker manifest create ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
-            --amend ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-amd64 \
-            --amend ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-arm64
-          docker manifest push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+          for SUFFIX in "" "-debug"; do
+            for T in "${TAG}${SUFFIX}" "latest${SUFFIX}"; do
+              docker manifest create "${IMAGE}:${T}" \
+                --amend "${IMAGE}:${T}-amd64" \
+                --amend "${IMAGE}:${T}-arm64"
+              docker manifest push "${IMAGE}:${T}"
+            done
+          done
 
   release:
     needs: [check-version, create-manifest]
