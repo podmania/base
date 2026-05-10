@@ -9,9 +9,10 @@
   outputs = { self, nixpkgs, nix2container }: let
     system = builtins.currentSystem;
     pkgs = nixpkgs.legacyPackages.${system};
+    n2c = nix2container.outputs.packages.${system}.nix2container;
   in {
     packages.${system} = {
-      base-image = nix2container.packages.${system}.nix2container.buildImage {
+      base-image = n2c.buildImage {
         name = "base";
         tag = "latest";
 
@@ -28,7 +29,7 @@
         };
       };
 
-      base-debug-image = nix2container.packages.${system}.nix2container.buildImage {
+      base-debug-image = n2c.buildImage {
         name = "base";
         tag = "latest-debug";
         fromImage = self.packages.${system}.base-image;
@@ -68,8 +69,8 @@
         };
         maxLayers = 1;
       };
-    };
 
-    defaultPackage.${system} = self.packages.${system}.base-image;
+      default = self.packages.${system}.base-image;
+    };
   };
 }
