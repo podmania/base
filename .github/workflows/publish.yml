@@ -68,21 +68,26 @@ jobs:
             echo "Deleting release ${TAG}"
             gh release delete "${TAG}" --repo ${{ github.repository }} --yes --cleanup-tag
           fi
-      - name: Delete existing package version
+      - name: Delete existing package versions
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="${{ needs.check-version.outputs.tag }}"
-          PACKAGE_NAME="${{ github.repository }}"
-          PACKAGE_NAME="${PACKAGE_NAME,,}"
-          PACKAGE_ID=$(gh api "/orgs/${{ github.repository_owner }}/packages/container/${PACKAGE_NAME#*/}" --jq '.id' 2>/dev/null || echo "")
-          if [ -n "$PACKAGE_ID" ]; then
-            VERSION_ID=$(gh api "/orgs/${{ github.repository_owner }}/packages/container/${PACKAGE_NAME#*/}/versions" --jq ".[] | select(.metadata.container.tags | index(\"${TAG}\")) | .id" 2>/dev/null || echo "")
-            if [ -n "$VERSION_ID" ]; then
-              echo "Deleting package version ${VERSION_ID} for tag ${TAG}"
-              gh api --method DELETE "/orgs/${{ github.repository_owner }}/packages/container/${PACKAGE_NAME#*/}/versions/${VERSION_ID}" 2>/dev/null || echo "Could not delete package version (may need manual cleanup)"
-            fi
-          fi
+          ORG="${{ github.repository_owner }}"
+          IMAGE="${{ github.repository }}"
+          IMAGE="${IMAGE#*/}"
+          VERSIONS=$(gh api "/orgs/${ORG}/packages/container/${IMAGE}/versions" --jq ".[] | select(.metadata.container.tags | index(\"${TAG}\")) | .id" 2>/dev/null || true)
+          for VID in $VERSIONS; do
+            echo "Deleting package version ${VID} for tag ${TAG}"
+            gh api --method DELETE "/orgs/${ORG}/packages/container/${IMAGE}/versions/${VID}" 2>/dev/null || echo "::warning::Could not delete package version ${VID} — GITHUB_TOKEN may lack delete:packages scope"
+          done
+          for ARCH_TAG in "${TAG}-amd64" "${TAG}-arm64" "${TAG}-debug-amd64" "${TAG}-debug-arm64"; do
+            AVIDS=$(gh api "/orgs/${ORG}/packages/container/${IMAGE}/versions" --jq ".[] | select(.metadata.container.tags | index(\"${ARCH_TAG}\")) | .id" 2>/dev/null || true)
+            for AVID in $AVIDS; do
+              echo "Deleting arch package version ${AVID} for tag ${ARCH_TAG}"
+              gh api --method DELETE "/orgs/${ORG}/packages/container/${IMAGE}/versions/${AVID}" 2>/dev/null || echo "::warning::Could not delete arch package version ${AVID}"
+            done
+          done
 
   build:
     needs: [check-version, cleanup]
