@@ -67,7 +67,7 @@
           ];
           pathsToLink = [ "/bin" "/sbin" ];
         };
-        maxLayers = 1;
+        maxLayers = 5;
       };
 
       default = self.packages.${system}.base-image;
