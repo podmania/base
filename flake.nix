@@ -10,6 +10,9 @@
     system = builtins.currentSystem;
     pkgs = nixpkgs.legacyPackages.${system};
     n2c = nix2container.outputs.packages.${system}.nix2container;
+    tmpDir = pkgs.runCommand "tmp-dir" {} ''
+      mkdir -p $out/tmp
+    '';
   in {
     packages.${system} = {
       base-image = n2c.buildImage {
@@ -22,6 +25,10 @@
           dockerTools.usrBinEnv
           dockerTools.caCertificates
           dockerTools.fakeNss
+          tmpDir
+        ];
+        perms = [
+          { path = tmpDir; regex = "/tmp"; mode = "1777"; }
         ];
         maxLayers = 1;
         config = {
